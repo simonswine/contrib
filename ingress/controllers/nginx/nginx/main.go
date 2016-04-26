@@ -167,6 +167,9 @@ type nginxConfiguration struct {
 	// http://nginx.org/en/docs/http/ngx_http_core_module.html#server_names_hash_bucket_size
 	ServerNameHashBucketSize int `structs:"server-name-hash-bucket-size,omitempty"`
 
+	// Enables or disables the redirect (301) to the HTTPS port
+	SSLRedirect bool `structs:"ssl-redirect,omitempty"`
+
 	// http://nginx.org/en/docs/http/ngx_http_ssl_module.html#ssl_buffer_size
 	// Sets the size of the buffer used for sending data.
 	// 4k helps NGINX to improve TLS Time To First Byte (TTTFB)
@@ -262,6 +265,7 @@ func newDefaultNginxCfg() nginxConfiguration {
 		SSLBufferSize:            sslBufferSize,
 		SSLCiphers:               sslCiphers,
 		SSLProtocols:             sslProtocols,
+		SSLRedirect:              true,
 		SSLSessionCache:          true,
 		SSLSessionCacheSize:      sslSessionCacheSize,
 		SSLSessionTickets:        true,
