@@ -1,0 +1,30 @@
+// vim: et:ts=4:sw=4:ft=groovy
+node('docker'){
+    catchError {
+        def imageName = 'simonswine/nginx-ingress-controller'
+
+        stage 'Checkout source code'
+        checkout scm
+        dir('ingress/controllers/nginx') {
+            stage 'Build nginx-ingress-controller'
+            sh "make docker_controller"
+
+            stage 'Build docker image'
+            sh "docker build -t ${imageName}:canary ."
+
+            if (env.BRANCH_NAME == 'master') {
+                stage 'Push docker image'
+                withCredentials([[$class: 'FileBinding', credentialsId: '31a54b99-cab6-4a1a-9bd7-4de5e85ca0e6', variable: 'DOCKER_CONFIG']]) {
+                    try {
+                        sh 'mkdir -p .dockercfg'
+                        sh 'ln -s \$DOCKER_CONFIG .dockercfg/config.json'
+                        sh "docker --config=.dockercfg push ${imageName}:${imageTags[0]}"
+                    } finally {
+                        sh 'rm -rf .dockercfg'
+                    }
+                }
+            }
+        }
+    }
+    step([$class: 'Mailer', recipients: 'simon@swine.de', notifyEveryUnstableBuild: true])
+}
