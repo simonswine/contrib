@@ -49,6 +49,13 @@ func (ngx *Manager) loadTemplate() {
 }
 
 func (ngx *Manager) writeCfg(cfg nginxConfiguration, ingressCfg IngressConfig) (bool, error) {
+	cfgCamelCase := fixKeyNames(structs.Map(cfg))
+
+	// pass cfg to server objects
+	for _, server := range ingressCfg.Servers {
+		server.SetCfg(cfgCamelCase)
+	}
+
 	conf := make(map[string]interface{})
 	conf["upstreams"] = ingressCfg.Upstreams
 	conf["servers"] = ingressCfg.Servers
@@ -57,7 +64,7 @@ func (ngx *Manager) writeCfg(cfg nginxConfiguration, ingressCfg IngressConfig) (
 	conf["defResolver"] = ngx.defResolver
 	conf["sslDHParam"] = ngx.sslDHParam
 	conf["customErrors"] = len(cfg.CustomHTTPErrors) > 0
-	conf["cfg"] = fixKeyNames(structs.Map(cfg))
+	conf["cfg"] = cfgCamelCase
 
 	if glog.V(3) {
 		b, err := json.Marshal(conf)

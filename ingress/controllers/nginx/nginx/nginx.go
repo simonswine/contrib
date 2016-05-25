@@ -16,6 +16,10 @@ limitations under the License.
 
 package nginx
 
+import (
+	"strings"
+)
+
 // IngressConfig describes an NGINX configuration
 type IngressConfig struct {
 	Upstreams    []*Upstream
@@ -70,6 +74,25 @@ type Server struct {
 	SSLCertificate    string
 	SSLCertificateKey string
 	SSLPemChecksum    string
+	cfg               map[string]interface{}
+}
+
+func (s *Server) SetCfg(cfg map[string]interface{}) {
+	s.cfg = cfg
+}
+
+func (s *Server) SSLRedirect() bool {
+	// server not supporting ssl
+	if !s.SSL {
+		return false
+	}
+
+	// check config
+	val, ok := s.cfg["sslRedirect"]
+	if ok && val != nil {
+		return val.(bool)
+	}
+	return false
 }
 
 // ServerByName sorts server by name
@@ -86,6 +109,27 @@ type Location struct {
 	Path         string
 	IsDefBackend bool
 	Upstream     Upstream
+	Annotations  map[string]string
+	Server       *Server
+}
+
+func (c *Location) SSLRedirect() bool {
+	// server not supporting ssl
+	if !c.Server.SSL {
+		return false
+	}
+
+	// check service annotation
+	val, ok := c.Annotations["ssl-redirect"]
+	if !ok {
+		return c.Server.SSLRedirect()
+	}
+
+	if strings.ToLower(val) == "true" {
+		return true
+	} else {
+		return false
+	}
 }
 
 // LocationByPath sorts location by path

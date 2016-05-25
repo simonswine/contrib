@@ -156,16 +156,18 @@ http {
         ssl_certificate {{ $server.SSLCertificate }};
         ssl_certificate_key {{ $server.SSLCertificateKey }};{{ end }}
 
-        {{ if and $cfg.sslRedirect $server.SSL }}
-        if ($scheme = http) {
-            return 301 https://$host$request_uri;
-        }
-
+        {{ if (and $server.SSL $cfg.hsts) }}
         more_set_headers                            "Strict-Transport-Security: max-age={{ $cfg.hstsMaxAge }}{{ if $cfg.hstsIncludeSubdomains }}; includeSubDomains{{ end }}; preload";
         {{ end }}
 
         {{ range $location := $server.Locations }}
         location {{ $location.Path }} {
+            {{ if $location.SSLRedirect }}
+            if ($scheme = http) {
+                return 301 https://$host$request_uri;
+            }
+            {{ end }}
+
             proxy_set_header Host                   $host;
 
             # Pass Real IP

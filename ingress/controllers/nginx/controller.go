@@ -47,6 +47,7 @@ const (
 	defUpstreamName          = "upstream-default-backend"
 	defServerName            = "_"
 	namedPortAnnotation      = "kubernetes.io/ingress-named-ports"
+	ingressAnnotationPrefix  = "ingress-nginx.kubernetes.io/"
 	podStoreSyncedPollPeriod = 1 * time.Second
 	rootLocation             = "/"
 )
@@ -577,6 +578,27 @@ func (lbc *loadBalancerController) getStreamServices(data map[string]string, pro
 	return svcs
 }
 
+func (lbc *loadBalancerController) getServiceAnnotations(namespace string, name string) (output map[string]string) {
+	output = map[string]string{
+		"test": "true",
+	}
+
+	svcKey := fmt.Sprintf("%s/%s", namespace, name)
+	svcObj, svcExists, err := lbc.svcLister.Store.GetByKey(svcKey)
+	if err != nil || !svcExists {
+		return
+	}
+
+	for key, value := range svcObj.(*api.Service).Annotations {
+		if !strings.HasPrefix(key, ingressAnnotationPrefix) {
+			continue
+		}
+		key = key[len(ingressAnnotationPrefix):]
+		output[key] = value
+	}
+	return
+}
+
 func (lbc *loadBalancerController) getDefaultUpstream() *nginx.Upstream {
 	upstream := &nginx.Upstream{
 		Name: defUpstreamName,
@@ -616,15 +638,17 @@ func (lbc *loadBalancerController) getUpstreamServers(data []interface{}) ([]*ng
 	if _, ok := servers[defServerName]; !ok {
 		// default server - no servername.
 		// there is no rule with default backend
-		servers[defServerName] = &nginx.Server{
+		server := &nginx.Server{
 			Name: defServerName,
-			Locations: []*nginx.Location{{
-				Path:         rootLocation,
-				IsDefBackend: true,
-				Upstream:     *lbc.getDefaultUpstream(),
-			},
-			},
 		}
+		server.Locations = []*nginx.Location{{
+			Path:         rootLocation,
+			IsDefBackend: true,
+			Upstream:     *lbc.getDefaultUpstream(),
+			Annotations:  map[string]string{},
+			Server:       server,
+		}}
+		servers[defServerName] = server
 	}
 
 	for _, ingIf := range data {
@@ -663,6 +687,7 @@ func (lbc *loadBalancerController) getUpstreamServers(data []interface{}) ([]*ng
 					if loc.Path == rootLocation && nginxPath == rootLocation && loc.IsDefBackend {
 						loc.Upstream = *ups
 						addLoc = false
+						loc.Annotations = lbc.getServiceAnnotations(ing.GetNamespace(), path.Backend.ServiceName)
 						continue
 					}
 
@@ -676,8 +701,10 @@ func (lbc *loadBalancerController) getUpstreamServers(data []interface{}) ([]*ng
 
 				if addLoc {
 					server.Locations = append(server.Locations, &nginx.Location{
-						Path:     nginxPath,
-						Upstream: *ups,
+						Path:        nginxPath,
+						Upstream:    *ups,
+						Annotations: lbc.getServiceAnnotations(ing.GetNamespace(), path.Backend.ServiceName),
+						Server:      server,
 					})
 				}
 			}
@@ -780,13 +807,14 @@ func (lbc *loadBalancerController) createServers(data []interface{}) map[string]
 			}
 
 			if _, ok := servers[host]; !ok {
-				locs := []*nginx.Location{}
-				locs = append(locs, &nginx.Location{
+				server := &nginx.Server{Name: host}
+				server.Locations = []*nginx.Location{{
 					Path:         rootLocation,
 					IsDefBackend: true,
 					Upstream:     *lbc.getDefaultUpstream(),
-				})
-				servers[host] = &nginx.Server{Name: host, Locations: locs}
+					Server:       server,
+				}}
+				servers[host] = server
 			}
 
 			if ngxCert, ok := pems[host]; ok {
