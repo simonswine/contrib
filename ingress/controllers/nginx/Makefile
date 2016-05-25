@@ -48,6 +48,7 @@ docker__controller: docker_clean
 	
 	docker cp . $(APP_NAME):$(CONTAINER_DIR)/
 	docker cp ../../Godeps $(APP_NAME):$(CONTAINER_DIR)/Godeps
+	docker cp ../../vendor $(APP_NAME):$(CONTAINER_DIR)/vendor
 	
 	docker start $(APP_NAME)
 	docker exec $(APP_NAME) make prepare VERSION=$(VERSION) REPO_INFO=$(REPO_INFO)
