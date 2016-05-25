@@ -732,6 +732,7 @@ func (lbc *loadBalancerController) createUpstreams(data []interface{}) map[strin
 
 				svcKey := fmt.Sprintf("%v/%v", ing.GetNamespace(), path.Backend.ServiceName)
 				svcObj, svcExists, err := lbc.svcLister.Store.GetByKey(svcKey)
+
 				if err != nil {
 					glog.Infof("error getting service %v from the cache: %v", svcKey, err)
 					continue
@@ -809,12 +810,18 @@ func (lbc *loadBalancerController) getPemsFromIngress(data []interface{}) map[st
 		ing := ingIf.(*extensions.Ingress)
 		for _, tls := range ing.Spec.TLS {
 			secretName := tls.SecretName
-			secrMetadata[fmt.Sprintf("%s/%s", ing.Namespace, secretName)] = true
-			secret, err := lbc.client.Secrets(ing.Namespace).Get(secretName)
+			secretKey := fmt.Sprintf("%s/%s", ing.Namespace, secretName)
+			secrMetadata[secretKey] = true
+			secretInterface, exists, err := lbc.secrLister.Store.GetByKey(secretKey)
 			if err != nil {
 				glog.Warningf("Error retriveing secret %v for ing %v: %v", secretName, ing.Name, err)
 				continue
 			}
+			if !exists {
+				glog.Warningf("Secret %v is not existing", secretKey)
+				continue
+			}
+			secret := secretInterface.(*api.Secret)
 			cert, ok := secret.Data[api.TLSCertKey]
 			if !ok {
 				glog.Warningf("Secret %v has no private key", secretName)
